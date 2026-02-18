@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ghost Chat V3 - Security Pro</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root { --green: #0f4; --bg: #000; --panel: #0a0a0a; }
+        body { font-family: 'Courier New', monospace; background: var(--bg); color: var(--green); margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* Menu Główne i Ekrany */
+        .screen { display: none; flex-direction: column; height: 100vh; padding: 15px; box-sizing: border-box; }
+        .active { display: flex; }
+        
+        .menu-btn { background: var(--bg); border: 2px solid var(--green); color: var(--green); padding: 20px; margin: 10px 0; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 16px; border-radius: 8px; }
+        .menu-btn:active { background: var(--green); color: #000; }
+        
+        /* Nagłówki i Status */
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--green); padding-bottom: 5px; margin-bottom: 10px; }
+        .nav-btn { background: var(--green); color: #000; border: none; padding: 5px 12px; font-weight: bold; border-radius: 4px; font-size: 12px; }
+
+        /* Skaner i Inputy */
+        #reader { width: 100%; border: 1px dashed var(--green); border-radius: 8px; margin-bottom: 10px; }
+        input { background: #111; border: 1px solid var(--green); color: var(--green); padding: 12px; margin: 5px 0; border-radius: 4px; font-size: 16px; width: 100%; box-sizing: border-box; }
+        
+        /* Czat - Wiadomości wyrównane do dołu */
+        #chat-container { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; padding-bottom: 80px; }
+        .msg { border-bottom: 1px solid #111; padding: 4px 0; word-break: break-all; }
+        .ts { color: #062; font-size: 10px; }
+        .n { font-weight: bold; color: #fff; }
+
+        /* Dolny pasek wpisywania */
+        .input-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #000; padding: 12px; display: flex; gap: 8px; border-top: 2px solid var(--green); }
+        .input-bar input { flex-grow: 1; margin: 0; }
+        .input-bar button { background: var(--green); border: none; padding: 10px 20px; font-weight: bold; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <div id="scr-menu" class="screen active">
+        <h2 style="text-align: center;">GHOST CHAT V3</h2>
+        <p style="text-align: center; font-size: 10px;">SYSTEM BEZPIECZNY - BRAK AUTOPAMIĘCI</p>
+        <button class="menu-btn" onclick="openScanner()">[1] SKANUJ KOD QR</button>
+        <button class="menu-btn" onclick="showScreen('scr-setup')">[2] WPISZ RĘCZNIE</button>
+        <button class="menu-btn" onclick="confirmExit()" style="border-color: #f00; color: #f00;">[X] WYJDŹ Z APKI</button>
+    </div>
+
+    <div id="scr-setup" class="screen">
+        <div class="header">
+            <span>KONFIGURACJA</span>
+            <button class="nav-btn" onclick="showScreen('scr-menu')">WSTECZ</button>
+        </div>
+        <div id="reader"></div>
+        <input type="password" id="t" placeholder="GitHub Token">
+        <input id="r" placeholder="User/Repozytorium">
+        <input type="password" id="c" placeholder="Klucz szyfru (Pokój)">
+        <input id="n" placeholder="Twój Nick">
+        <button class="menu-btn" onclick="init()">POŁĄCZ I WEJDŹ</button>
+    </div>
+
+    <div id="scr-chat" class="screen">
+        <div class="header">
+            <span id="room-info" style="font-size: 10px;">ŁĄCZENIE...</span>
+            <button class="nav-btn" onclick="confirmExit()">WYJDŹ</button>
+        </div>
+        <div id="chat-container"></div>
+        <div class="input-bar">
+            <input id="m" placeholder="Wiadomość..." onkeypress="if(event.key==='Enter') send()">
+            <button onclick="send()">OK</button>
+        </div>
+    </div>
+
+<script>
+    let history = "", sha = "", path = "", qrScanner;
+    const $ = id => document.getElementById(id);
+
+    // BLOKADA WYJŚCIA
+    window.onbeforeunload = (e) => {
+        e.preventDefault();
+        return "Czy na pewno chcesz wyjść z pancernym sesji?";
+    };
+
+    function confirmExit() {
+        if(confirm("Czy na pewno chcesz zamknąć aplikację? Wszystkie dane sesji zostaną wyczyszczone.")) {
+            window.location.reload();
+        }
+    }
+
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        $(id).classList.add('active');
+        if(id !== 'scr-setup' && qrScanner) {
+            qrScanner.stop().catch(e => {});
+        }
+    }
+
+    function openScanner() {
+        showScreen('scr-setup');
+        qrScanner = new Html5Qrcode("reader");
+        qrScanner.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, (txt) => {
+            const d = txt.split('|');
+            if(d.length >= 4) {
+                $('t').value = d[0]; $('r').value = d[1]; $('c').value = d[2]; $('n').value = d[3];
+                init();
+            }
+        }).catch(e => alert("Błąd kamery. Sprawdź HTTPS."));
+    }
+
+    async function init() {
+        if(!$('t').value || !$('c').value) return alert("Podaj dane!");
+        
+        const key = $('c').value;
+        const roomHash = CryptoJS.MD5(key).toString().substring(0, 10);
+        path = "pokoje/" + roomHash + ".txt";
+
+        if(qrScanner) try { await qrScanner.stop(); } catch(e){}
+
+        showScreen('scr-chat');
+        $('room-info').innerText = `POKÓJ: ${roomHash} | NICK: ${$('n').value}`;
+
+        setInterval(fetchMessages, 4000);
+        fetchMessages();
+    }
+
+    async function fetchMessages() {
+        if(!path) return;
+        try {
+            const res = await fetch(`https://api.github.com/repos/${$('r').value}/contents/${path}?t=${Date.now()}`, {
+                headers: {'Authorization': `token ${$('t').value}`}
+            });
+            if (res.ok) {
+                const d = await res.json();
+                sha = d.sha;
+                const dec = CryptoJS.AES.decrypt(atob(d.content), $('c').value).toString(CryptoJS.enc.Utf8);
+                if (dec && dec !== history) {
+                    $('chat-container').innerHTML = dec.split('\n').map(l => `<div class="msg">${l}</div>`).join('');
+                    $('chat-container').scrollTop = $('chat-container').scrollHeight;
+                    history = dec;
+                }
+            }
+        } catch (e) {}
+    }
+
+    async function send() {
+        const m = $('m').value.trim();
+        if(!m) return;
+        const time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        const entry = `<span class="ts">[${time}]</span> <span class="n">${$('n').value}:</span> ${m}`;
+        const full = history + (history ? "\n" : "") + entry;
+        const enc = btoa(CryptoJS.AES.encrypt(full, $('c').value).toString());
+
+        const res = await fetch(`https://api.github.com/repos/${$('r').value}/contents/${path}`, {
+            method: 'PUT',
+            headers: {'Authorization': `token ${$('t').value}`},
+            body: JSON.stringify({message: "msg", content: enc, sha: sha})
+        });
+        if(res.ok) { $('m').value = ""; fetchMessages(); }
+    }
+</script>
+</body>
+</html>
