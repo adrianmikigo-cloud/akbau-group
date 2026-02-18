@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ghost Chat PRO - V4.1 FINAL</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root { --neon-green: #0f4; --dark-bg: #050505; --nav-h: 70px; }
+        body { font-family: 'Segoe UI', monospace; background: var(--dark-bg); color: var(--neon-green); margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        /* Ekrany */
+        .screen { display: none; flex-direction: column; height: calc(100vh - var(--nav-h)); width: 100%; overflow-y: auto; }
+        .active { display: flex; }
+
+        /* Status Bar z diodą */
+        #status-bar { 
+            font-size: 10px; padding: 8px; text-align: center; 
+            background: #000; border-bottom: 1px solid #111; 
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+        #status-dot { width: 8px; height: 8px; background: #555; border-radius: 50%; box-shadow: 0 0 5px #000; transition: 0.3s; }
+
+        /* Nawigacja na dole */
+        .main-nav { 
+            position: fixed; bottom: 0; left: 0; right: 0; 
+            height: var(--nav-h); background: #000; 
+            border-top: 2px solid var(--neon-green); 
+            display: flex; justify-content: space-around; align-items: center; 
+            z-index: 200; 
+        }
+        .nav-item { color: var(--neon-green); text-decoration: none; font-size: 10px; font-weight: bold; text-align: center; flex: 1; padding: 10px; cursor: pointer; }
+        .nav-item:active { background: #0a1a0a; }
+
+        /* Setup / Logowanie */
+        #setup { padding: 15px; box-sizing: border-box; }
+        .box { border: 1px solid var(--neon-green); padding: 15px; border-radius: 8px; background: #0a0a0a; margin-top: 10px; }
+        #reader { width: 100%; border-radius: 8px; overflow: hidden; background: #111; border: 1px dashed var(--neon-green); margin-bottom: 10px; }
+        input { background: #111; border: 1px solid #222; color: var(--neon-green); padding: 12px; font-size: 16px; border-radius: 4px; width: 100%; box-sizing: border-box; margin-bottom: 8px; outline: none; }
+        input:focus { border-color: var(--neon-green); }
+        
+        /* Czat UI */
+        #chat-ui { height: calc(100vh - var(--nav-h)); position: relative; }
+        #chat-container { 
+            flex-grow: 1; overflow-y: auto; padding: 15px; 
+            display: flex; flex-direction: column; 
+            justify-content: flex-end; 
+        }
+        
+        /* Odstęp od paska wpisywania */
+        .chat-bottom-space { height: 80px; flex-shrink: 0; }
+
+        .msg { border-bottom: 1px solid #111; padding: 10px 0; word-break: break-all; font-size: 14px; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .ts { color: #062; font-size: 10px; margin-right: 5px; }
+        .n { font-weight: bold; color: #fff; text-transform: uppercase; }
+
+        /* Pasek wpisywania nad nawigacją */
+        .input-bar { 
+            position: absolute; bottom: 0; left: 0; right: 0; 
+            background: #000; padding: 10px; display: flex; gap: 8px; 
+            border-top: 1px solid #222; z-index: 150;
+        }
+        .input-bar input { flex-grow: 1; margin: 0; }
+        .input-bar button { width: 60px; background: var(--neon-green); color: #000; font-weight: bold; border: none; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <div id="chat-ui" class="screen active">
+        <div id="status-bar">
+            <div id="status-dot"></div>
+            <span id="st-text">SYSTEM GOTOWY</span>
+        </div>
+        <div id="chat-container">
+            <div id="messages-list"></div>
+            <div class="chat-bottom-space"></div>
+        </div>
+        <div class="input-bar">
+            <input id="m" placeholder="Wiadomość..." onkeypress="if(event.key==='Enter') send()">
+            <button onclick="send()">OK</button>
+        </div>
+    </div>
+
+    <div id="setup" class="screen">
+        <h3 style="text-align:center">KONFIGURACJA POŁĄCZENIA</h3>
+        <div id="reader"></div>
+        <div class="box">
+            <input type="password" id="t" placeholder="GitHub Token">
+            <input id="r" placeholder="User/Repo (np. marian/oferty)">
+            <input type="password" id="c" placeholder="Klucz Szyfru">
+            <input id="n" placeholder="Twój Nick">
+            <button onclick="init()" style="width:100%; background:var(--neon-green); color:#000; padding:15px; border:none; font-weight:bold; border-radius:4px;">ZALOGUJ I POŁĄCZ</button>
+        </div>
+    </div>
+
+    <nav class="main-nav">
+        <div class="nav-item" onclick="showScreen('chat-ui')">💬<br>CZAT</div>
+        <div class="nav-item" onclick="openScanner()">📷<br>SKANUJ QR</div>
+        <div class="nav-item" onclick="showScreen('setup')">⚙️<br>USTAW</div>
+        <div class="nav-item" onclick="confirmExit()" style="color:#f55">❌<br>LOGOUT</div>
+    </nav>
+
+<script>
+    let history = "", sha = "", path = "", qrScanner;
+    const $ = id => document.getElementById(id);
+
+    // Blokada wyjścia
+    window.onbeforeunload = () => "Utracisz sesję szyfrowania.";
+
+    function confirmExit() {
+        if(confirm("Wylogować? Dane wrażliwe zostaną usunięte z RAM.")) {
+            window.location.reload();
+        }
+    }
+
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        $(id).classList.add('active');
+        if(id !== 'setup' && qrScanner) qrScanner.stop().catch(()=>{});
+    }
+
+    function openScanner() {
+        showScreen('setup');
+        qrScanner = new Html5Qrcode("reader");
+        qrScanner.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, (txt) => {
+            const d = txt.split('|');
+            if(d.length >= 4) {
+                $('t').value = d[0]; $('r').value = d[1]; $('c').value = d[2]; $('n').value = d[3];
+                init();
+            }
+        }).catch(e => console.log("Kamera czeka..."));
+    }
+
+    async function init() {
+        if(!$('t').value || !$('c').value) return alert("Brak danych!");
+        const key = $('c').value;
+        const roomHash = CryptoJS.MD5(key).toString().substring(0, 10);
+        path = "pokoje/" + roomHash + ".txt";
+        
+        if(qrScanner) try { await qrScanner.stop(); } catch(e){}
+
+        // Zero Trace: zapisujemy tylko publiczne dane
+        localStorage.setItem('gh_r', $('r').value);
+        localStorage.setItem('gh_n', $('n').value);
+
+        showScreen('chat-ui');
+        setInterval(fetchMessages, 4000);
+        fetchMessages();
+    }
+
+    async function fetchMessages() {
+        if(!path) return;
+        const dot = $('status-dot');
+        const txt = $('st-text');
+        
+        dot.style.background = "#ff0"; // Żółty: Praca...
+        
+        try {
+            const res = await fetch(`https://api.github.com/repos/${$('r').value}/contents/${path}?nocache=${Date.now()}`, {
+                headers: {'Authorization': `token ${$('t').value}`}
+            });
+            if (res.ok) {
+                const d = await res.json();
+                sha = d.sha;
+                const dec = CryptoJS.AES.decrypt(atob(d.content), $('c').value).toString(CryptoJS.enc.Utf8);
+                if (dec && dec !== history) {
+                    $('messages-list').innerHTML = dec.split('\n').map(l => `<div class="msg">${l}</div>`).join('');
+                    $('chat-container').scrollTop = $('chat-container').scrollHeight;
+                    history = dec;
+                }
+                txt.innerText = "SZYFROWANIE AKTYWNE";
+                dot.style.background = "#0f4"; // Zielony: OK
+            } else if(res.status === 404) {
+                txt.innerText = "POKÓJ PUSTY - OCZEKIWANIE";
+                dot.style.background = "#0af"; // Niebieski: Nowy
+            }
+        } catch (e) {
+            txt.innerText = "BŁĄD POŁĄCZENIA";
+            dot.style.background = "#f00"; // Czerwony: Padło
+        }
+    }
+
+    async function send() {
+        const m = $('m').value.trim();
+        if(!m) return;
+        const time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        const entry = `<span class="ts">[${time}]</span> <span class="n">${$('n').value}:</span> ${m}`;
+        const full = history + (history ? "\n" : "") + entry;
+        const enc = btoa(CryptoJS.AES.encrypt(full, $('c').value).toString());
+
+        try {
+            const res = await fetch(`https://api.github.com/repos/${$('r').value}/contents/${path}`, {
+                method: 'PUT',
+                headers: {'Authorization': `token ${$('t').value}`},
+                body: JSON.stringify({message: "msg", content: enc, sha: sha})
+            });
+            if(res.ok) { 
+                const d = await res.json();
+                sha = d.content.sha;
+                $('m').value = ""; 
+                fetchMessages(); 
+            }
+        } catch(e) { alert("Błąd wysyłania!"); }
+    }
+
+    window.onload = () => {
+        if(localStorage.getItem('gh_r')) $('r').value = localStorage.getItem('gh_r');
+        if(localStorage.getItem('gh_n')) $('n').value = localStorage.getItem('gh_n');
+    };
+</script>
+</body>
+</html>
