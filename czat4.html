@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+    <title>Ghost Chat v2 + QR</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body{font-family:monospace;background:#000;color:#0f4;margin:0;padding:10px;display:flex;flex-direction:column;height:100vh;box-sizing:border-box}
+        .box{border:1px solid #0f4;padding:15px;border-radius:5px;background:#050505;margin-bottom:10px}
+        input{background:#000;border:1px solid #0f4;color:#0f4;padding:12px;margin:5px 0;width:100%;box-sizing:border-box;font-size:16px}
+        button{background:#0f4;color:#000;border:none;padding:15px;width:100%;font-weight:700;cursor:pointer;margin-top:10px;text-transform:uppercase}
+        #chat{flex-grow:1;border:1px solid #041;background:#050505;overflow-y:auto;padding:10px;margin:10px 0;font-size:13px;display:none}
+        #status{font-size:10px;text-align:center;color:#062;margin-bottom:5px}
+        .msg{margin-bottom:5px; border-bottom: 1px solid #020}
+        .ts{color:#062;font-size:10px}
+        .n{color:#fff;font-weight:700}
+        #reader { width: 100%; background: #000; border: 1px dashed #0f4; display: none; margin-bottom: 10px;}
+    </style>
+</head>
+<body>
+
+<div id="setup" class="box">
+    <h3 style="text-align:center;margin-top:0">LOGOWANIE</h3>
+    
+    <div id="reader"></div>
+    <button id="qr-btn" onclick="startQR()" style="background:#062;color:#fff;margin-bottom:10px">SKANUJ KOD KONFIGURACJI</button>
+
+    <input type="password" id="t" placeholder="GitHub Token">
+    <input id="r" placeholder="Użytkownik/Repozytorium">
+    <input type="password" id="c" placeholder="Klucz (Hasło czatu)">
+    <input id="n" placeholder="Twój Nick">
+    <button onclick="init()">START / ZAPISZ</button>
+</div>
+
+<div id="status">OFFLINE</div>
+<div id="chat"></div>
+
+<div id="input-area" style="display:none; gap:5px">
+    <input id="m" placeholder="Wiadomość..." onkeypress="if(event.key==='Enter') send()">
+    <button style="width:70px;margin:5px 0" onclick="send()">OK</button>
+</div>
+
+<script>
+let lastContent = "", currentSha = "", path = "czat2.txt";
+const $ = id => document.getElementById(id);
+
+// --- OBSŁUGA QR ---
+function startQR() {
+    $('reader').style.display = 'block';
+    const html5QrCode = new Html5Qrcode("reader");
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+    html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
+        // Oczekiwany format: TOKEN|REPO|KLUCZ|NICK
+        const data = decodedText.split('|');
+        if(data.length >= 4) {
+            $('t').value = data[0];
+            $('r').value = data[1];
+            $('c').value = data[2];
+            $('n').value = data[3];
+            html5QrCode.stop();
+            $('reader').style.display = 'none';
+            $('qr-btn').innerText = "ZESKANOWANO POPRAWNIE ✅";
+        } else {
+            alert("Błędny format kodu QR!");
+        }
+    }).catch(err => alert("Błąd kamery: " + err));
+}
+
+// --- LOGIKA CZATU ---
+window.onload = () => {
+    if(localStorage.getItem('gh_t')) $('t').value = localStorage.getItem('gh_t');
+    if(localStorage.getItem('gh_r')) $('r').value = localStorage.getItem('gh_r');
+    if(localStorage.getItem('gh_n')) $('n').value = localStorage.getItem('gh_n');
+    if(localStorage.getItem('gh_c')) $('c').value = localStorage.getItem('gh_c');
+};
+
+async function init() {
+    localStorage.setItem('gh_t', $('t').value);
+    localStorage.setItem('gh_r', $('r').value);
+    localStorage.setItem('gh_n', $('n').value);
+    localStorage.setItem('gh_c', $('c').value);
+
+    $('setup').style.display = 'none';
+    $('chat').style.display = 'block';
+    $('input-area').style.display = 'flex';
+    
+    setInterval(fetchMessages, 4000);
+    fetchMessages();
+}
+
+async function fetchMessages() {
+    try {
+        const url = `https://api.github.com/repos/${$('r').value}/contents/${path}?t=${Date.now()}`;
+        const res = await fetch(url, {
+            headers: {'Authorization': `token ${$('t').value}`}
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            currentSha = data.sha;
+            const decrypted = CryptoJS.AES.decrypt(atob(data.content), $('c').value).toString(CryptoJS.enc.Utf8);
+            
+            if (decrypted && decrypted !== lastContent) {
+                $('chat').innerHTML = decrypted.split('\n').map(l => `<div class="msg">${l}</div>`).join('');
+                $('chat').scrollTop = $('chat').scrollHeight;
+                lastContent = decrypted;
+                $('status').innerText = "POŁĄCZONO • SYNC OK";
+            }
+        }
+    } catch (e) {
+        $('status').innerText = "BŁĄD POŁĄCZENIA";
+    }
+}
+
+async function send() {
+    const msgText = $('m').value.trim();
+    if (!msgText) return;
+
+    const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+    const newEntry = `<span class="ts">[${time}]</span> <span class="n">${$('n').value}:</span> ${msgText}`;
+    const fullHistory = lastContent + (lastContent ? "\n" : "") + newEntry;
+    
+    const encrypted = btoa(CryptoJS.AES.encrypt(fullHistory, $('c').value).toString());
+
+    const res = await fetch(`https://api.github.com/repos/${$('r').value}/contents/${path}`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `token ${$('t').value}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            message: "update",
+            content: encrypted,
+            sha: currentSha || null
+        })
+    });
+
+    if (res.ok) {
+        $('m').value = "";
+        fetchMessages();
+    }
+}
+</script>
+</body>
+</html>
