@@ -1,0 +1,21 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Ghost</title><script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script><style>
+body{font-family:monospace;background:#000;color:#0f4;margin:0;padding:10px;display:flex;flex-direction:column;height:100vh;box-sizing:border-box}
+input{background:#000;border:1px solid #0f4;color:#0f4;padding:10px;margin:5px 0;width:100%;box-sizing:border-box;font-size:16px}
+button{background:#0f4;color:#000;border:none;padding:12px;width:100%;font-weight:700;cursor:pointer;margin-top:5px}
+#chat{flex-grow:1;border:1px solid #041;background:#050505;overflow-y:auto;padding:10px;margin:10px 0;font-size:13px}
+.ts{color:#062;font-size:10px}.n{color:#fff;font-weight:700}
+</style></head><body>
+<div id="s"><input type="password" id="t" placeholder="Token"><input id="r" placeholder="User/Repo"><input id="c" placeholder="Kod"><input id="n" placeholder="Nick"><button onclick="st()">START</button></div>
+<div id="st" style="font-size:10px;text-align:center">OFFLINE</div><div id="chat"></div>
+<div style="display:flex;gap:5px"><input id="m" placeholder="Wiadomość..." onkeypress="if(event.key==='Enter') sd()"><button style="width:60px" onclick="sd()">OK</button></div>
+<script>
+let h="",p="",sh="";const $=id=>document.getElementById(id);
+async function st(){const v=$('c').value;p="pokoje/"+CryptoJS.MD5(v).toString().substring(0,10)+".txt";$('s').style.display='none';setInterval(rf,4000);rf()}
+async function rf(){try{const res=await fetch(`https://api.github.com/repos/${$('r').value}/contents/${p}?t=${Date.now()}`,{headers:{'Authorization':`token ${$('t').value}`}});
+if(res.ok){const d=await res.json();sh=d.sha;const dec=CryptoJS.AES.decrypt(atob(d.content),$('c').value).toString(CryptoJS.enc.Utf8);
+if(dec&&dec!==h){$('chat').innerHTML=dec.split('\n').map(l=>`<div>${l}</div>`).join('');$('chat').scrollTop=$('chat').scrollHeight;h=dec;$('st').innerText="SYNC OK"}}}catch(e){$('st').innerText="ERR"}}
+async function sd(){if(!$('m').value.trim())return;const tm=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+const nm=`<span class="ts">[${tm}]</span> <span class="n">${$('n').value}:</span> ${$('m').value}`;const fh=h+"\n"+nm;
+const res=await fetch(`https://api.github.com/repos/${$('r').value}/contents/${p}`,{method:'PUT',headers:{'Authorization':`token ${$('t').value}`},body:JSON.stringify({message:"m",content:btoa(CryptoJS.AES.encrypt(fh,$('c').value).toString()),sha:sh||null})});
+if(res.ok){$('m').value="";rf()}}
+</script></body></html>
