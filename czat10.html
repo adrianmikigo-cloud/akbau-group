@@ -3,68 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ghost Chat V3 - Security Pro</title>
+    <title>Ghost Chat PRO - Budowa</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        :root { --green: #0f4; --bg: #000; --panel: #0a0a0a; }
-        body { font-family: 'Courier New', monospace; background: var(--bg); color: var(--green); margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        
-        /* Menu Główne i Ekrany */
-        .screen { display: none; flex-direction: column; height: 100vh; padding: 15px; box-sizing: border-box; }
-        .active { display: flex; }
-        
-        .menu-btn { background: var(--bg); border: 2px solid var(--green); color: var(--green); padding: 20px; margin: 10px 0; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 16px; border-radius: 8px; }
-        .menu-btn:active { background: var(--green); color: #000; }
-        
-        /* Nagłówki i Status */
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--green); padding-bottom: 5px; margin-bottom: 10px; }
-        .nav-btn { background: var(--green); color: #000; border: none; padding: 5px 12px; font-weight: bold; border-radius: 4px; font-size: 12px; }
+        :root { --neon: #0f4; --bg: #050505; --gray: #1a1a1a; --red: #ff4444; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', monospace; background: var(--bg); color: var(--neon); margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-        /* Skaner i Inputy */
-        #reader { width: 100%; border: 1px dashed var(--green); border-radius: 8px; margin-bottom: 10px; }
-        input { background: #111; border: 1px solid var(--green); color: var(--green); padding: 12px; margin: 5px 0; border-radius: 4px; font-size: 16px; width: 100%; box-sizing: border-box; }
-        
-        /* Czat - Wiadomości wyrównane do dołu */
-        #chat-container { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; padding-bottom: 80px; }
-        .msg { border-bottom: 1px solid #111; padding: 4px 0; word-break: break-all; }
+        /* --- STRONY --- */
+        .page { display: none; height: calc(100vh - 70px); width: 100%; overflow-y: auto; padding: 20px; }
+        .active-page { display: flex; flex-direction: column; }
+
+        /* --- WYCENTROWANE MENU START --- */
+        #main-menu { 
+            justify-content: center; /* Pionowo */
+            align-items: center;     /* Poziomo */
+        }
+        .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 400px; }
+        .menu-item { background: #111; border: 1px solid var(--neon); padding: 30px 10px; border-radius: 15px; cursor: pointer; text-align: center; font-weight: bold; }
+        .menu-item span { font-size: 30px; display: block; margin-bottom: 10px; }
+        .menu-item:active { background: var(--neon); color: #000; }
+
+        /* --- CZAT (Większy odstęp) --- */
+        #chat-ui { padding: 0; }
+        #chat-container { 
+            flex-grow: 1; 
+            overflow-y: auto; 
+            padding: 15px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 12px;
+            margin-bottom: 90px; /* ODSTĘP OD PASKA WPISYWANIA */
+        }
+        .msg { border-bottom: 1px solid #111; padding-bottom: 8px; word-break: break-all; }
         .ts { color: #062; font-size: 10px; }
         .n { font-weight: bold; color: #fff; }
 
-        /* Dolny pasek wpisywania */
-        .input-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #000; padding: 12px; display: flex; gap: 8px; border-top: 2px solid var(--green); }
-        .input-bar input { flex-grow: 1; margin: 0; }
-        .input-bar button { background: var(--green); border: none; padding: 10px 20px; font-weight: bold; border-radius: 4px; }
+        /* --- USTAWIENIA I PRZYCISK ROZŁĄCZ --- */
+        .box { border: 1px solid var(--neon); padding: 15px; border-radius: 8px; background: #000; display: flex; flex-direction: column; gap: 10px; }
+        #reader { width: 100%; border-radius: 8px; background: #111; border: 1px dashed var(--neon); margin-bottom: 10px; }
+        .btn-disconnect { background: none; border: 1px solid var(--red); color: var(--red); padding: 12px; border-radius: 4px; font-weight: bold; margin-top: 10px; cursor: pointer; }
+        .btn-disconnect:active { background: var(--red); color: #fff; }
+
+        /* --- ELEMENTY UI --- */
+        input { background: #111; border: 1px solid var(--neon); color: var(--neon); padding: 12px; font-size: 16px; border-radius: 4px; width: 100%; }
+        button.primary { background: var(--neon); color: #000; border: none; padding: 15px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+
+        .input-bar { position: fixed; bottom: 70px; left: 0; right: 0; background: #000; padding: 10px; display: flex; gap: 8px; border-top: 1px solid #222; z-index: 100; }
+        .input-bar input { flex-grow: 1; }
+        .input-bar button { width: 60px; background: var(--neon); border: none; font-weight: bold; border-radius: 4px; }
+
+        .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; background: #000; border-top: 1px solid #222; display: flex; align-items: center; z-index: 200; }
+        .nav-btn { flex: 1; text-align: center; color: #444; font-size: 10px; cursor: pointer; }
+        .nav-btn.active { color: var(--neon); }
     </style>
 </head>
 <body>
 
-    <div id="scr-menu" class="screen active">
-        <h2 style="text-align: center;">GHOST CHAT V3</h2>
-        <p style="text-align: center; font-size: 10px;">SYSTEM BEZPIECZNY - BRAK AUTOPAMIĘCI</p>
-        <button class="menu-btn" onclick="openScanner()">[1] SKANUJ KOD QR</button>
-        <button class="menu-btn" onclick="showScreen('scr-setup')">[2] WPISZ RĘCZNIE</button>
-        <button class="menu-btn" onclick="confirmExit()" style="border-color: #f00; color: #f00;">[X] WYJDŹ Z APKI</button>
+    <div id="main-menu" class="page active-page">
+        <h1 style="margin-bottom: 40px; text-align:center;">GHOST <span style="color:#fff">PRO</span></h1>
+        <div class="menu-grid">
+            <div class="menu-item" onclick="showPage('chat-ui')"><span>💬</span>CZAT</div>
+            <div class="menu-item" onclick="showPage('setup')"><span>⚙️</span>USTAW</div>
+        </div>
     </div>
 
-    <div id="scr-setup" class="screen">
-        <div class="header">
-            <span>KONFIGURACJA</span>
-            <button class="nav-btn" onclick="showScreen('scr-menu')">WSTECZ</button>
-        </div>
+    <div id="setup" class="page">
         <div id="reader"></div>
-        <input type="password" id="t" placeholder="GitHub Token">
-        <input id="r" placeholder="User/Repozytorium">
-        <input type="password" id="c" placeholder="Klucz szyfru (Pokój)">
-        <input id="n" placeholder="Twój Nick">
-        <button class="menu-btn" onclick="init()">POŁĄCZ I WEJDŹ</button>
+        <div class="box">
+            <input type="password" id="t" placeholder="GitHub Token">
+            <input id="r" placeholder="User/Repo">
+            <input type="password" id="c" placeholder="Klucz Szyfru">
+            <input id="n" placeholder="Nick">
+            <button class="primary" onclick="init()">POŁĄCZ I ZAPISZ</button>
+            <button class="btn-disconnect" onclick="logout()">❌ ROZŁĄCZ SESJĘ</button>
+        </div>
     </div>
 
-    <div id="scr-chat" class="screen">
-        <div class="header">
-            <span id="room-info" style="font-size: 10px;">ŁĄCZENIE...</span>
-            <button class="nav-btn" onclick="confirmExit()">WYJDŹ</button>
-        </div>
+    <div id="chat-ui" class="page">
         <div id="chat-container"></div>
         <div class="input-bar">
             <input id="m" placeholder="Wiadomość..." onkeypress="if(event.key==='Enter') send()">
@@ -72,67 +89,72 @@
         </div>
     </div>
 
+    <nav class="nav-bar">
+        <div class="nav-btn active" onclick="showPage('main-menu')" id="nav-home">🏠<br>START</div>
+        <div class="nav-btn" onclick="showPage('chat-ui')" id="nav-chat">💬<br>CZAT</div>
+        <div class="nav-btn" onclick="showPage('setup')" id="nav-set">⚙️<br>USTAW</div>
+    </nav>
+
 <script>
-    let history = "", sha = "", path = "", qrScanner;
+    let history = "", sha = "", path = "", qrScanner, currentPage = 'main-menu';
     const $ = id => document.getElementById(id);
 
-    // BLOKADA WYJŚCIA
-    window.onbeforeunload = (e) => {
-        e.preventDefault();
-        return "Czy na pewno chcesz wyjść z pancernym sesji?";
-    };
+    function showPage(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        $(pageId).classList.add('active-page');
+        if(pageId === 'main-menu') $('nav-home').classList.add('active');
+        if(pageId === 'chat-ui') $('nav-chat').classList.add('active');
+        if(pageId === 'setup') { $('nav-set').classList.add('active'); startScanner(); } else { stopScanner(); }
+        currentPage = pageId;
+    }
 
-    function confirmExit() {
-        if(confirm("Czy na pewno chcesz zamknąć aplikację? Wszystkie dane sesji zostaną wyczyszczone.")) {
-            window.location.reload();
+    function logout() {
+        if(confirm("Czy na pewno chcesz wyczyścić dane i rozłączyć?")) {
+            localStorage.clear();
+            location.reload();
         }
     }
 
-    function showScreen(id) {
-        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-        $(id).classList.add('active');
-        if(id !== 'scr-setup' && qrScanner) {
-            qrScanner.stop().catch(e => {});
-        }
-    }
-
-    function openScanner() {
-        showScreen('scr-setup');
-        qrScanner = new Html5Qrcode("reader");
-        qrScanner.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, (txt) => {
+    // --- RESZTA LOGIKI (SKANER / GITHUB) ---
+    function startScanner() {
+        if (!qrScanner) qrScanner = new Html5Qrcode("reader");
+        qrScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (txt) => {
             const d = txt.split('|');
             if(d.length >= 4) {
                 $('t').value = d[0]; $('r').value = d[1]; $('c').value = d[2]; $('n').value = d[3];
                 init();
             }
-        }).catch(e => alert("Błąd kamery. Sprawdź HTTPS."));
+        }).catch(e => {});
     }
 
+    async function stopScanner() {
+        if (qrScanner && qrScanner.isScanning) await qrScanner.stop();
+    }
+
+    window.onload = () => {
+        ['gh_t', 'gh_r', 'gh_n', 'gh_c'].forEach(k => {
+            if(localStorage.getItem(k)) $(k.replace('gh_','')).value = localStorage.getItem(k);
+        });
+    };
+
     async function init() {
-        if(!$('t').value || !$('c').value) return alert("Podaj dane!");
-        
-        const key = $('c').value;
-        const roomHash = CryptoJS.MD5(key).toString().substring(0, 10);
-        path = "pokoje/" + roomHash + ".txt";
-
-        if(qrScanner) try { await qrScanner.stop(); } catch(e){}
-
-        showScreen('scr-chat');
-        $('room-info').innerText = `POKÓJ: ${roomHash} | NICK: ${$('n').value}`;
-
+        if(!$('c').value || !$('t').value) return alert("Błąd danych!");
+        path = "pokoje/" + CryptoJS.MD5($('c').value).toString().substring(0, 10) + ".txt";
+        ['t','r','n','c'].forEach(id => localStorage.setItem('gh_'+id, $(id).value));
+        showPage('chat-ui');
         setInterval(fetchMessages, 4000);
         fetchMessages();
     }
 
     async function fetchMessages() {
-        if(!path) return;
+        if(!path || currentPage !== 'chat-ui') return;
         try {
             const res = await fetch(`https://api.github.com/repos/${$('r').value}/contents/${path}?t=${Date.now()}`, {
                 headers: {'Authorization': `token ${$('t').value}`}
             });
             if (res.ok) {
-                const d = await res.json();
-                sha = d.sha;
+                const d = await res.json(); sha = d.sha;
                 const dec = CryptoJS.AES.decrypt(atob(d.content), $('c').value).toString(CryptoJS.enc.Utf8);
                 if (dec && dec !== history) {
                     $('chat-container').innerHTML = dec.split('\n').map(l => `<div class="msg">${l}</div>`).join('');
@@ -144,13 +166,10 @@
     }
 
     async function send() {
-        const m = $('m').value.trim();
-        if(!m) return;
-        const time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-        const entry = `<span class="ts">[${time}]</span> <span class="n">${$('n').value}:</span> ${m}`;
+        const m = $('m').value.trim(); if(!m) return;
+        const entry = `<span class="ts">[${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}]</span> <span class="n">${$('n').value}:</span> ${m}`;
         const full = history + (history ? "\n" : "") + entry;
         const enc = btoa(CryptoJS.AES.encrypt(full, $('c').value).toString());
-
         const res = await fetch(`https://api.github.com/repos/${$('r').value}/contents/${path}`, {
             method: 'PUT',
             headers: {'Authorization': `token ${$('t').value}`},
