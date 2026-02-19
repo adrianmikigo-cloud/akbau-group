@@ -3,99 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GHOST PRO v11</title>
+    <title>GHOST PRO v12</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        :root { --neon: #0f4; --bg: #050505; --red: #ff4444; --nav-h: 80px; --input-h: 60px; }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        :root { --neon: #0f4; --bg: #050505; --red: #ff4444; --nav-h: 75px; --input-h: 65px; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
         body { 
             font-family: 'Segoe UI', monospace; 
-            background: var(--bg); 
-            color: var(--neon); 
-            margin: 0; padding: 0; 
-            height: 100vh; 
-            width: 100vw;
-            overflow: hidden; 
-            display: flex;
-            flex-direction: column;
+            background: var(--bg); color: var(--neon); 
+            margin: 0; padding: 0; height: 100vh; overflow: hidden; 
         }
 
         /* --- STRONY --- */
         .page { 
             display: none; 
-            flex: 1;
-            width: 100%;
-            overflow-y: auto; 
-            padding: 15px;
-            position: relative;
+            position: absolute;
+            top: 0; left: 0; right: 0; 
+            bottom: var(--nav-h); /* Zawsze miejsce na menu */
+            overflow-y: auto; padding: 20px;
             -webkit-overflow-scrolling: touch;
         }
-        .active-page { display: flex; flex-direction: column; }
+        .active-page { display: block; }
 
-        /* --- LOGO GHOST --- */
-        .ghost-logo { font-size: 8px; line-height: 8px; margin: 20px auto; color: #1a1a1a; white-space: pre; text-align: center; }
-
-        /* --- START --- */
-        #p-main { justify-content: center; align-items: center; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 400px; }
+        /* --- MENU START --- */
+        #p-main { text-align: center; padding-top: 15vh; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; max-width: 400px; margin: 0 auto; }
         .btn-m { 
-            background: #0a0a0a; border: 2px solid var(--neon); padding: 40px 10px; 
-            border-radius: 20px; font-weight: bold; text-align: center; transition: 0.2s;
+            background: #0a0a0a; border: 2px solid var(--neon); padding: 35px 10px; 
+            border-radius: 20px; font-weight: bold; transition: 0.2s;
         }
-        .btn-m i { font-style: normal; font-size: 40px; display: block; margin-bottom: 10px; }
-        .btn-m:active { background: var(--neon); color: #000; box-shadow: 0 0 20px var(--neon); }
+        .btn-m i { font-style: normal; font-size: 35px; display: block; margin-bottom: 10px; }
+        .btn-m:active { background: var(--neon); color: #000; }
 
-        /* --- CZAT (UKŁAD OD DOŁU) --- */
-        #p-chat { padding: 0; }
-        #chat-scroll-area {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-        }
+        /* --- CZAT (STABILNY) --- */
+        #p-chat { bottom: calc(var(--nav-h) + var(--input-h)); padding-bottom: 10px; }
         #chat-container { 
-            margin-top: auto; /* To wypycha wiadomości do dołu */
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
+            display: flex; flex-direction: column; 
+            justify-content: flex-end; min-height: 100%;
         }
-        .msg { border-bottom: 1px solid #111; padding: 6px 0; font-size: 14px; line-height: 1.3; color: #fff; }
+        .msg { border-bottom: 1px solid #111; padding: 8px 0; font-size: 14px; color: #fff; }
         .ts { color: #062; font-size: 10px; margin-right: 6px; }
         .n { font-weight: bold; color: var(--neon); }
-        #scroll-anchor { height: 1px; width: 100%; }
 
-        /* --- USTAW --- */
-        #reader { width: 100%; min-height: 250px; background: #000; border: 2px solid var(--neon); margin-bottom: 15px; border-radius: 15px; overflow: hidden; }
-        input { background: #111; border: 1px solid var(--neon); color: var(--neon); padding: 15px; border-radius: 10px; font-size: 16px; width: 100%; margin-bottom: 10px; }
-        .btn-act { background: var(--neon); color: #000; border: none; padding: 18px; font-weight: bold; border-radius: 10px; width: 100%; font-size: 16px; }
-
-        /* --- UI / NAV --- */
-        .locked { filter: grayscale(1); opacity: 0.1; cursor: not-allowed !important; }
-        
+        /* --- WPISYWANIE (NAD MENU) --- */
         .input-bar { 
-            height: var(--input-h); background: #000; padding: 10px; 
-            display: flex; gap: 8px; border-top: 1px solid #222; 
+            position: fixed; bottom: var(--nav-h); left: 0; right: 0; 
+            height: var(--input-h); background: #000; border-top: 1px solid #222;
+            display: none; padding: 10px; gap: 8px; z-index: 100;
         }
+        .input-bar input { flex: 1; background: #111; border: 1px solid var(--neon); color: var(--neon); padding: 10px; border-radius: 8px; font-size: 16px; }
 
+        /* --- NAV BAR (PANCERNY) --- */
         .nav-bar { 
-            height: var(--nav-h); background: #000; 
-            display: flex; border-top: 2px solid #222; 
+            position: fixed; bottom: 0; left: 0; right: 0; 
+            height: var(--nav-h); background: #000; border-top: 2px solid #222;
+            display: flex; z-index: 101;
         }
         .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #333; font-size: 10px; font-weight: bold; }
-        .nav-item i { font-style: normal; font-size: 28px; margin-bottom: 2px; }
+        .nav-item i { font-style: normal; font-size: 26px; }
         .nav-item.on { color: var(--neon); }
         .nav-item.logout-btn.active-logout { color: var(--red); }
+
+        /* --- USTAW --- */
+        #reader { width: 100%; min-height: 250px; background: #000; border: 2px solid var(--neon); border-radius: 15px; margin-bottom: 15px; overflow: hidden; }
+        .set-input { background: #111; border: 1px solid var(--neon); color: var(--neon); padding: 15px; border-radius: 10px; width: 100%; margin-bottom: 10px; font-size: 16px; }
+
+        .locked { filter: grayscale(1); opacity: 0.1; }
     </style>
 </head>
 <body>
 
     <div id="p-main" class="page active-page">
-        <div class="ghost-logo">.-. (o o) | O | | | `---'</div>
-        <h1 style="margin: 0 0 5px 0; font-size: 28px; letter-spacing: 4px; text-align: center;">GHOST <span style="color:#fff">PRO</span></h1>
-        <div id="lock-status" style="font-size:11px; margin-bottom:30px; color:var(--red); font-weight:bold;">• OFFLINE •</div>
+        <h1 style="letter-spacing: 5px;">GHOST <span style="color:#fff">PRO</span></h1>
+        <div id="lock-status" style="font-size:10px; margin-bottom:30px; color:var(--red);">• OFFLINE •</div>
         <div class="grid">
             <div id="m-btn-chat" class="btn-m locked" onclick="checkGo('p-chat')"><i>💬</i><span>CZAT</span></div>
             <div class="btn-m" onclick="goTo('p-set')"><i>⚙️</i><span>USTAW</span></div>
@@ -103,29 +85,26 @@
     </div>
 
     <div id="p-set" class="page">
-        <h2 style="text-align:center; margin: 10px 0;">KONFIGURACJA</h2>
         <div id="reader"></div>
-        <input type="password" id="t" placeholder="GitHub Token">
-        <input id="r" placeholder="Użytkownik/Repozytorium">
-        <input type="password" id="c" placeholder="Klucz Szyfru">
-        <input id="n" placeholder="Twój Nick">
-        <button class="btn-act" onclick="init()">ZAPISZ I POŁĄCZ</button>
+        <input type="password" id="t" class="set-input" placeholder="GitHub Token">
+        <input id="r" class="set-input" placeholder="User/Repo">
+        <input type="password" id="c" class="set-input" placeholder="Klucz Szyfru">
+        <input id="n" class="set-input" placeholder="Twój Nick">
+        <button onclick="init()" style="width:100%; background:var(--neon); padding:18px; border-radius:10px; font-weight:bold; border:none;">POŁĄCZ</button>
     </div>
 
     <div id="p-chat" class="page">
-        <div id="chat-scroll-area">
-            <div id="chat-container"></div>
-            <div id="scroll-anchor"></div>
-        </div>
-        <div id="chat-input-zone" class="input-bar" style="display:none;">
-            <input id="m" placeholder="Napisz..." onkeypress="if(event.key==='Enter') send()">
-            <button style="background:var(--neon); border:none; padding:0 20px; font-weight:bold; border-radius:10px; height: 100%;" onclick="send()">OK</button>
-        </div>
+        <div id="chat-container"></div>
+    </div>
+
+    <div id="chat-input-zone" class="input-bar">
+        <input id="m" placeholder="Wiadomość..." onkeypress="if(event.key==='Enter') send()">
+        <button onclick="send()" style="background:var(--neon); border:none; padding:0 20px; border-radius:8px; font-weight:bold;">OK</button>
     </div>
 
     <nav class="nav-bar">
         <div class="nav-item on" id="n-main" onclick="goTo('p-main')"><i>🏠</i><span>START</span></div>
-        <div id="n-chat-btn" class="nav-item locked" onclick="checkGo('p-chat')"><i>💬</i><span>CZAT</span></div>
+        <div id="n-chat" class="nav-item locked" onclick="checkGo('p-chat')"><i>💬</i><span>CZAT</span></div>
         <div class="nav-item" id="n-set" onclick="goTo('p-set')"><i>⚙️</i><span>USTAW</span></div>
         <div id="n-logout" class="nav-item logout-btn locked" onclick="logout()"><i>🚪</i><span>WYLOGUJ</span></div>
     </nav>
@@ -135,22 +114,18 @@
     const $ = id => document.getElementById(id);
 
     function checkGo(id) {
-        if(!path) { alert("🔒 Skonfiguruj połączenie!"); goTo('p-set'); }
+        if(!path) { alert("🔒 Brak połączenia!"); goTo('p-set'); }
         else goTo(id);
     }
 
     function updateUI() {
         const ok = (path !== "");
         $('m-btn-chat').classList.toggle('locked', !ok);
-        $('n-chat-btn').classList.toggle('locked', !ok);
+        $('n-chat').classList.toggle('locked', !ok);
         $('n-logout').classList.toggle('locked', !ok);
         $('n-logout').classList.toggle('active-logout', ok);
         $('lock-status').innerText = ok ? "• SYSTEM AKTYWNY •" : "• WYMAGANE POŁĄCZENIE •";
         $('lock-status').style.color = ok ? "var(--neon)" : "var(--red)";
-    }
-
-    function scrollToBottom() {
-        $('scroll-anchor').scrollIntoView({ behavior: 'smooth' });
     }
 
     function goTo(id) {
@@ -163,7 +138,9 @@
         
         $('chat-input-zone').style.display = (id === 'p-chat') ? 'flex' : 'none';
         
-        if(id === 'p-chat') setTimeout(scrollToBottom, 200);
+        if(id === 'p-chat') {
+            setTimeout(() => { $(id).scrollTop = $(id).scrollHeight; }, 100);
+        }
         if(id === 'p-set') setTimeout(startQR, 400); else stopQR();
     }
 
@@ -191,19 +168,16 @@
         });
         if($('c').value && $('t').value) {
             path = "pokoje/" + CryptoJS.MD5($('c').value).toString().substring(0, 10) + ".txt";
-            setInterval(fetchData, 4000);
-            fetchData();
+            setInterval(fetchData, 4000); fetchData();
         }
         updateUI();
     };
 
     async function init() {
-        if(!$('c').value || !$('t').value) return alert("Błąd danych!");
+        if(!$('c').value || !$('t').value) return alert("Błąd!");
         path = "pokoje/" + CryptoJS.MD5($('c').value).toString().substring(0, 10) + ".txt";
         ['t','r','n','c'].forEach(id => localStorage.setItem('gh_'+id, $(id).value));
-        updateUI(); goTo('p-chat');
-        setInterval(fetchData, 4000);
-        fetchData();
+        updateUI(); goTo('p-chat'); setInterval(fetchData, 4000); fetchData();
     }
 
     async function fetchData() {
@@ -218,7 +192,7 @@
                 if(dec && dec !== hist) {
                     $('chat-container').innerHTML = dec.split('\n').map(l => `<div class="msg">${l}</div>`).join('');
                     hist = dec;
-                    scrollToBottom();
+                    $('p-chat').scrollTop = $('p-chat').scrollHeight;
                 }
             }
         } catch(e) {}
