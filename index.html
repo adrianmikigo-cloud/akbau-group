@@ -1,70 +1,16 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>Lista plików repo</title>
-<style>
-body {
-    font-family: monospace;
-    background:#111;
-    color:#0f4;
-    padding:20px;
-}
-.error { color:red; }
-</style>
+<title>Test</title>
 </head>
 <body>
 
-<h1>📂 Zawartość repozytorium</h1>
-<div id="status"></div>
-<ul id="file-list"></ul>
+<h1>TEST JS</h1>
 
 <script>
-const OWNER = "TU_WPISZ_LOGIN";
-const REPO  = "TU_WPISZ_REPO";
+alert("JS działa");
+</script>
 
-const list   = document.getElementById("file-list");
-const status = document.getElementById("status");
-
-async function loadPath(path = "") {
-
-    try {
-
-        const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`;
-        status.innerHTML = "Ładowanie z: " + url;
-
-        const res = await fetch(url);
-
-        if (!res.ok) {
-            throw new Error("Błąd HTTP: " + res.status);
-        }
-
-        const data = await res.json();
-
-        if (!Array.isArray(data)) {
-            throw new Error("Niepoprawna odpowiedź API");
-        }
-
-        list.innerHTML = "";
-
-        data.forEach(item => {
-            const li = document.createElement("li");
-            const a  = document.createElement("a");
-
-            a.textContent = item.name;
-
-            if (item.type === "dir") {
-                a.href = "#";
-                a.onclick = () => loadPath(item.path);
-            } else {
-                a.href = item.download_url;
-                a.target = "_blank";
-            }
-
-            li.appendChild(a);
-            list.appendChild(li);
-        });
-
-        status.innerHTML += " ✔ OK";
-
-    } catch (err) {
+</body>
+</html>
