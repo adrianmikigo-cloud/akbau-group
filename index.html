@@ -1,15 +1,60 @@
 <!DOCTYPE html>
-<html>
+<html lang="pl">
 <head>
 <meta charset="UTF-8">
-<title>Test</title>
+<title>Debug GitHub API</title>
+<style>
+body {
+    font-family: monospace;
+    background:#111;
+    color:#0f4;
+    padding:20px;
+    white-space:pre-wrap;
+}
+.error { color:red; }
+.ok { color:#0f4; }
+</style>
 </head>
 <body>
 
-<h1>TEST JS</h1>
+<h1>📂 Debug repozytorium</h1>
+<div id="output"></div>
 
 <script>
-alert("JS działa");
+const OWNER = "WPISZ_LOGIN";
+const REPO  = "WPISZ_REPO";
+const BRANCH = "main"; // zmień na master jeśli trzeba
+
+const output = document.getElementById("output");
+
+async function test() {
+    const url = `https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`;
+    output.innerHTML += "URL:\n" + url + "\n\n";
+
+    try {
+        const res = await fetch(url);
+        output.innerHTML += "Status HTTP: " + res.status + "\n\n";
+
+        const text = await res.text();
+        output.innerHTML += "Surowa odpowiedź:\n" + text + "\n\n";
+
+        const data = JSON.parse(text);
+
+        if (data.tree) {
+            output.innerHTML += "\n✔ Otrzymano listę plików:\n\n";
+            data.tree.forEach(file => {
+                output.innerHTML += file.path + "\n";
+            });
+        } else {
+            output.innerHTML += "\n❌ Brak pola 'tree' w odpowiedzi\n";
+        }
+
+    } catch (e) {
+        output.innerHTML += "\n❌ Błąd:\n" + e.message;
+    }
+}
+
+test();
 </script>
 
 </body>
