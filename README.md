@@ -1,2 +1,0 @@
-# akbau-group
-akbau-group
