@@ -1,61 +1,81 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-<meta charset="UTF-8">
-<title>Debug GitHub API</title>
-<style>
-body {
-    font-family: monospace;
-    background:#111;
-    color:#0f4;
-    padding:20px;
-    white-space:pre-wrap;
-}
-.error { color:red; }
-.ok { color:#0f4; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ghost Pro - Panel Sterowania</title>
+    <style>
+        :root { --neon: #0f4; --bg: #050505; }
+        body { background: var(--bg); color: var(--neon); font-family: 'Segoe UI', monospace; padding: 20px; text-align: center; }
+        h1 { border-bottom: 2px solid var(--neon); padding-bottom: 10px; font-size: 20px; }
+        
+        #file-list { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+        
+        .chat-link { 
+            background: #111; 
+            border: 1px solid #333; 
+            color: var(--neon); 
+            padding: 15px; 
+            text-decoration: none; 
+            border-radius: 8px; 
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .chat-link:active { background: var(--neon); color: #000; }
+        .status-dot { width: 10px; height: 10px; background: var(--neon); border-radius: 50%; box-shadow: 0 0 5px var(--neon); }
+    </style>
 </head>
 <body>
 
-<h1>📂 Debug repozytorium</h1>
-<div id="output"></div>
+    <h1>MOJE SYSTEMY CZATÓW</h1>
+    <div id="loader">Skanuję repozytorium...</div>
+    <div id="file-list"></div>
 
-<script>
-const OWNER = "WPISZ_LOGIN";
-const REPO  = "WPISZ_REPO";
-const BRANCH = "main"; // zmień na master jeśli trzeba
+    <script>
+        async function loadChats() {
+            // WPISZ SWOJE DANE TUTAJ:
+            const user = "TWÓJ_LOGIN_GITHUB";
+            const repo = "TWOJA_NAZWA_REPO";
 
-const output = document.getElementById("output");
+            try {
+                const response = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/`);
+                const files = await response.json();
+                
+                const listContainer = document.getElementById('file-list');
+                document.getElementById('loader').style.display = 'none';
 
-async function test() {
-    const url = `https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`;
-    output.innerHTML += "URL:\n" + url + "\n\n";
+                files.forEach(file => {
+                    // Sprawdzamy czy plik zaczyna się od "czat" i jest plikiem HTML
+                    if (file.name.toLowerCase().startsWith('czat') && file.name.endsWith('.html')) {
+                        const link = document.createElement('a');
+                        link.href = file.name;
+                        link.className = 'chat-link';
+                        
+                        // Ładna nazwa bez rozszerzenia .html
+                        const displayName = file.name.replace('.html', '').toUpperCase();
+                        
+                        link.innerHTML = `
+                            <span>📂 ${displayName}</span>
+                            <div class="status-dot"></div>
+                        `;
+                        listContainer.appendChild(link);
+                    }
+                });
 
-    try {
-        const res = await fetch(url);
-        output.innerHTML += "Status HTTP: " + res.status + "\n\n";
+                if (listContainer.innerHTML === "") {
+                    listContainer.innerHTML = "Brak plików zaczynających się od 'czat'";
+                }
 
-        const text = await res.text();
-        output.innerHTML += "Surowa odpowiedź:\n" + text + "\n\n";
-
-        const data = JSON.parse(text);
-
-        if (data.tree) {
-            output.innerHTML += "\n✔ Otrzymano listę plików:\n\n";
-            data.tree.forEach(file => {
-                output.innerHTML += file.path + "\n";
-            });
-        } else {
-            output.innerHTML += "\n❌ Brak pola 'tree' w odpowiedzi\n";
+            } catch (error) {
+                document.getElementById('loader').innerText = "Błąd ładowania listy plików.";
+                console.error(error);
+            }
         }
 
-    } catch (e) {
-        output.innerHTML += "\n❌ Błąd:\n" + e.message;
-    }
-}
-
-test();
-</script>
-
+        loadChats();
+    </script>
 </body>
 </html>
