@@ -1,237 +1,150 @@
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ghost Chat PRO++</title>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-
-<style>
-:root {
-    --bg: #050505;
-    --green: #00ff66;
-}
-
-body {
-    margin:0;
-    font-family: monospace;
-    background: var(--bg);
-    color: var(--green);
-    display:flex;
-    flex-direction:column;
-    height:100vh;
-}
-
-#setup, #chat-ui {
-    padding:15px;
-}
-
-#chat-ui { display:none; }
-
-input {
-    background:#111;
-    border:1px solid var(--green);
-    color:var(--green);
-    padding:10px;
-    margin-bottom:8px;
-    width:100%;
-}
-
-button {
-    background:var(--green);
-    border:none;
-    padding:10px;
-    font-weight:bold;
-    cursor:pointer;
-}
-
-#chat-container {
-    flex:1;
-    overflow-y:auto;
-    padding:10px;
-    margin-bottom:60px;
-}
-
-.msg {
-    margin-bottom:6px;
-    font-size:14px;
-}
-
-.ts { font-size:10px; opacity:0.5; }
-
-.input-bar {
-    position:fixed;
-    bottom:0;
-    left:0;
-    right:0;
-    background:#000;
-    padding:10px;
-    display:flex;
-    gap:5px;
-}
-
-.input-bar input { flex:1; }
-</style>
-</head>
-<body>
-
-<div id="setup">
-    <input type="password" id="token" placeholder="GitHub Token">
-    <input id="repo" placeholder="user/repo">
-    <input type="password" id="roomKey" placeholder="Hasło pokoju">
-    <input id="nick" placeholder="Nick">
-    <button onclick="init()">POŁĄCZ</button>
+<!-- =================== LOADING OVERLAY =================== -->
+<div id="loading-overlay" style="
+position:fixed;
+inset:0;
+background:#000;
+color:#0f4;
+display:none;
+align-items:center;
+justify-content:center;
+z-index:9999;
+font-size:18px;">
+ŁADOWANIE...
 </div>
 
+<!-- =================== SETUP =================== -->
+<div id="setup">
+
+    <h2 style="text-align:center;">GHOST CHAT PRO</h2>
+
+    <div id="status-qr" style="text-align:center; margin-bottom:5px;">
+        GOTOWY DO SKANOWANIA
+    </div>
+
+    <div id="reader"></div>
+
+    <div class="box">
+        <input type="password" id="t" placeholder="GitHub Token">
+        <input id="r" placeholder="User/Repo">
+        <input type="password" id="c" placeholder="Klucz (Hasło pokoju)">
+        <input id="n" placeholder="Twój Nick">
+
+        <button onclick="init()">POŁĄCZ Z POKOJEM</button>
+        <button onclick="openInfo()">INFO</button>
+    </div>
+
+</div>
+
+
+<!-- =================== CHAT UI =================== -->
 <div id="chat-ui">
-    <div id="status"></div>
+
+    <!-- ===== TOP BAR ===== -->
+    <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        padding:8px;
+        background:#000;
+        border-bottom:2px solid #0f4;">
+
+        <button onclick="goBack()">◀ WSTECZ</button>
+
+        <div id="status" style="font-size:11px;"></div>
+
+        <button onclick="toggleMenu()">☰ MENU</button>
+    </div>
+
+    <!-- ===== LICZNIK ===== -->
+    <div style="
+        text-align:center;
+        font-size:11px;
+        background:#061;
+        padding:4px;">
+        Wiadomości: <span id="msg-count">0</span>
+    </div>
+
+    <!-- ===== CHAT ===== -->
     <div id="chat-container"></div>
+
+    <!-- ===== INPUT ===== -->
     <div class="input-bar">
-        <input id="msgInput" placeholder="Wiadomość..." onkeypress="if(event.key==='Enter') send()">
+        <input id="m" placeholder="Wiadomość..." 
+               onkeypress="if(event.key==='Enter') send()">
         <button onclick="send()">OK</button>
     </div>
 </div>
 
-<script>
-let messages = [];
-let sha = "";
-let path = "";
-let syncLock = false;
 
-const $ = id => document.getElementById(id);
+<!-- =================== PANEL MENU =================== -->
+<div id="side-menu" style="
+position:fixed;
+top:0;
+right:-260px;
+width:250px;
+height:100%;
+background:#111;
+border-left:2px solid #0f4;
+padding:15px;
+transition:0.3s;
+z-index:500;">
 
-/* ================= HASH KOLORU NICKU ================= */
-function nickColor(nick){
-    const hash = CryptoJS.MD5(nick).toString();
-    return "#" + hash.substring(0,6);
-}
+<h3>MENU</h3>
 
-/* ================= SZYFROWANIE AES + HMAC ================= */
-function encryptData(data, key){
-    const cipher = CryptoJS.AES.encrypt(data, key).toString();
-    const hmac = CryptoJS.HmacSHA256(cipher, key).toString();
-    return btoa(JSON.stringify({cipher, hmac}));
-}
+<button onclick="openInfo()">Informacje o pokoju</button>
+<button onclick="clearLocal()">Wyczyść czat lokalnie</button>
+<button onclick="confirmExit()">Wyjdź z pokoju</button>
 
-function decryptData(payload, key){
-    const obj = JSON.parse(atob(payload));
-    const verify = CryptoJS.HmacSHA256(obj.cipher, key).toString();
-    if(verify !== obj.hmac) throw "HMAC ERROR";
-    return CryptoJS.AES.decrypt(obj.cipher, key).toString(CryptoJS.enc.Utf8);
-}
+</div>
 
-/* ================= INIT ================= */
-async function init(){
-    const key = $('roomKey').value;
-    if(!key) return alert("Brak hasła");
 
-    const roomHash = CryptoJS.SHA256(key).toString().substring(0,12);
-    path = `rooms/${roomHash}.json`;
+<!-- =================== MODAL WYJŚCIA =================== -->
+<div id="exit-modal" style="
+display:none;
+position:fixed;
+inset:0;
+background:rgba(0,0,0,0.8);
+z-index:1000;
+align-items:center;
+justify-content:center;">
 
-    $('setup').style.display='none';
-    $('chat-ui').style.display='flex';
-    $('status').innerText = "POKÓJ: " + roomHash;
+<div style="
+background:#000;
+padding:20px;
+border:2px solid #0f4;
+width:300px;
+text-align:center;">
 
-    setInterval(fetchMessages, 2500);
-    fetchMessages();
-}
+<h3>Czy na pewno chcesz wyjść?</h3>
 
-/* ================= FETCH ================= */
-async function fetchMessages(){
-    if(syncLock) return;
-    try{
-        const res = await fetch(`https://api.github.com/repos/${$('repo').value}/contents/${path}?t=${Date.now()}`,{
-            headers:{'Authorization':`token ${$('token').value}`}
-        });
+<button onclick="exitRoom()">TAK</button>
+<button onclick="closeModal()">ANULUJ</button>
 
-        if(res.ok){
-            const data = await res.json();
-            sha = data.sha;
-            const decrypted = decryptData(data.content, $('roomKey').value);
-            messages = JSON.parse(decrypted);
-            render();
-        }
-    }catch(e){}
-}
+</div>
+</div>
 
-/* ================= RENDER (BEZ XSS) ================= */
-function render(){
-    const container = $('chat-container');
-    container.innerHTML="";
-    messages.sort((a,b)=>a.id-b.id);
 
-    for(const m of messages){
-        const div = document.createElement("div");
-        div.className="msg";
+<!-- =================== MODAL INFO =================== -->
+<div id="info-modal" style="
+display:none;
+position:fixed;
+inset:0;
+background:rgba(0,0,0,0.8);
+z-index:1000;
+align-items:center;
+justify-content:center;">
 
-        const ts = document.createElement("span");
-        ts.className="ts";
-        ts.textContent = "["+new Date(m.time).toLocaleTimeString()+"] ";
+<div style="
+background:#000;
+padding:20px;
+border:2px solid #0f4;
+width:320px;">
 
-        const nick = document.createElement("span");
-        nick.textContent = m.nick + ": ";
-        nick.style.color = nickColor(m.nick);
+<h3>Informacje o pokoju</h3>
 
-        const text = document.createElement("span");
-        text.textContent = m.text;
+<p id="info-content"></p>
 
-        div.appendChild(ts);
-        div.appendChild(nick);
-        div.appendChild(text);
+<button onclick="closeModal()">ZAMKNIJ</button>
 
-        container.appendChild(div);
-    }
-
-    container.scrollTop = container.scrollHeight;
-}
-
-/* ================= SEND (ANTI-CONFLICT) ================= */
-async function send(){
-    const text = $('msgInput').value.trim();
-    if(!text) return;
-
-    syncLock = true;
-
-    await fetchMessages(); // najpierw pobierz świeżą wersję
-
-    const newMsg = {
-        id: Date.now(),
-        nick: $('nick').value,
-        text,
-        time: Date.now()
-    };
-
-    messages.push(newMsg);
-
-    const encrypted = encryptData(JSON.stringify(messages), $('roomKey').value);
-
-    try{
-        const res = await fetch(`https://api.github.com/repos/${$('repo').value}/contents/${path}`,{
-            method:"PUT",
-            headers:{'Authorization':`token ${$('token').value}`},
-            body: JSON.stringify({
-                message:"update chat",
-                content: encrypted,
-                sha: sha
-            })
-        });
-
-        if(res.ok){
-            $('msgInput').value="";
-            const data = await res.json();
-            sha = data.content.sha;
-            render();
-        }else{
-            alert("Konflikt zapisu — spróbuj ponownie.");
-        }
-
-    }catch(e){
-        alert("Błąd wysyłania.");
-    }
-
-    syncLock = false;
-}
-</script>
-</body>
-</html>
+</div>
+</div>
