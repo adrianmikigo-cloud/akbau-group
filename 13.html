@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GHOST PRO v10.3.2</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root { --neon: #0f4; --bg: #050505; --red: #ff4444; --nav-h: 85px; --input-h: 70px; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        
+        body { 
+            font-family: 'Segoe UI', monospace; 
+            background: var(--bg); color: var(--neon); 
+            margin: 0; padding: 0; 
+            height: 100vh; height: 100dvh; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+        }
+
+        .page-wrapper {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .page { 
+            display: none; 
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0; 
+            overflow-y: auto; 
+            padding: 20px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .active-page { display: block; }
+
+        /* --- LOGO --- */
+        .ghost-logo { font-size: 8px; line-height: 8px; margin-bottom: 20px; color: #1a1a1a; white-space: pre; text-align: center; }
+
+        /* --- START --- */
+        #p-main { text-align: center; padding-top: 8vh; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 450px; margin: 0 auto; }
+        .btn-m { 
+            background: #0a0a0a; border: 2px solid var(--neon); padding: 45px 10px; 
+            border-radius: 25px; font-weight: bold; transition: 0.2s; cursor: pointer;
+        }
+        .btn-m i { font-style: normal; font-size: 45px; display: block; margin-bottom: 12px; }
+        .btn-m span { font-size: 14px; letter-spacing: 2px; }
+        .btn-m:active { background: var(--neon); color: #000; box-shadow: 0 0 20px var(--neon); }
+
+        /* --- CZAT (NAPRAWIONE SCROLOWANIE) --- */
+        #chat-container { 
+            display: block; /* Powrót do block, żeby scroll działał naturalnie */
+            width: 100%;
+        }
+        .msg { border-bottom: 1px solid #111; padding: 10px 0; font-size: 14px; line-height: 1.4; color: #fff; word-break: break-word; }
+        .ts { color: #062; font-size: 10px; margin-right: 6px; }
+        .n { font-weight: bold; color: var(--neon); }
+
+        /* --- USTAW --- */
+        #reader { width: 100%; min-height: 250px; background: #000; border: 2px solid var(--neon); margin-bottom: 15px; border-radius: 15px; overflow: hidden; }
+        input { background: #111; border: 1px solid var(--neon); color: var(--neon); padding: 15px; border-radius: 10px; font-size: 16px; width: 100%; margin-bottom: 10px; }
+        .btn-act { background: var(--neon); color: #000; border: none; padding: 18px; font-weight: bold; border-radius: 10px; width: 100%; font-size: 16px; cursor: pointer;}
+
+        /* --- UI --- */
+        .input-bar { 
+            height: var(--input-h);
+            background: #000; padding: 12px; border-top: 1px solid #222;
+            display: none; gap: 8px; flex-shrink: 0;
+        }
+        .nav-bar { 
+            height: var(--nav-h); 
+            background: #000; display: flex; border-top: 2px solid #222; flex-shrink: 0; 
+        }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #333; font-size: 10px; font-weight: bold; cursor: pointer; }
+        .nav-item i { font-style: normal; font-size: 30px; margin-bottom: 4px; }
+        .nav-item.on { color: var(--neon); }
+        .nav-item.logout-btn.active-logout { color: var(--red); }
+        .locked { filter: grayscale(1); opacity: 0.1; cursor: not-allowed !important; }
+    </style>
+</head>
+<body>
+
+    <div class="page-wrapper">
+        <div id="p-main" class="page active-page">
+            <div class="ghost-logo">.-. (o o) | O | | | `---'</div>
+            <h1 style="margin-bottom:5px; font-size: 32px; letter-spacing: 5px; text-align: center;">GHOST <span style="color:#fff">PRO</span></h1>
+            <div id="lock-status" style="font-size:11px; margin-bottom:40px; color:var(--red); font-weight:bold; text-align: center;">• OFFLINE •</div>
+            <div class="grid">
+                <div id="m-btn-chat" class="btn-m locked" onclick="checkGo('p-chat')"><i>💬</i><span>CZAT</span></div>
+                <div class="btn-m" onclick="goTo('p-set')"><i>⚙️</i><span>USTAW</span></div>
+            </div>
+        </div>
+
+        <div id="p-set" class="page">
+            <h2 style="text-align:center; margin-top:0;">KONFIGURACJA</h2>
+            <div id="reader"></div>
+            <input type="password" id="t" placeholder="GitHub Token">
+            <input id="r" placeholder="Użytkownik/Repozytorium">
+            <input type="password" id="c" placeholder="Klucz Szyfru (Hasło)">
+            <input id="n" placeholder="Twoja ksywka">
+            <button class="btn-act" onclick="init()">ZAPISZ I POŁĄCZ</button>
+        </div>
+
+        <div id="p-chat" class="page">
+            <div id="chat-container"></div>
+            <div id="chat-anchor" style="height: 20px; clear: both;"></div>
+        </div>
+    </div>
+
+    <div id="chat-input-zone" class="input-bar">
+        <input id="m" placeholder="Napisz..." onkeypress="if(event.key==='Enter') send()" style="margin:0;">
+        <button style="background:var(--neon); border:none; padding:0 20px; font-weight:bold; border-radius:10px;" onclick="send()">OK</button>
+    </div>
+
+    <nav class="nav-bar">
+        <div class="nav-item on" id="n-main" onclick="goTo('p-main')"><i>🏠</i><span>START</span></div>
+        <div id="n-chat-btn" class="nav-item locked" onclick="checkGo('p-chat')"><i>💬</i><span>CZAT</span></div>
+        <div class="nav-item" id="n-set" onclick="goTo('p-set')"><i>⚙️</i><span>USTAW</span></div>
+        <div id="n-logout" class="nav-item logout-btn locked" onclick="logout()"><i>🚪</i><span>WYLOGUJ</span></div>
+    </nav>
+
+<script>
+    let hist = "", sha = "", path = "", qr = null;
+    const $ = id => document.getElementById(id);
+
+    function checkGo(id) {
+        if(!path) { alert("🔒 Brak połączenia!"); goTo('p-set'); }
+        else goTo(id);
+    }
+
+    function updateUI() {
+        const ok = (path !== "");
+        $('m-btn-chat').classList.toggle('locked', !ok);
+        $('n-chat-btn').classList.toggle('locked', !ok);
+        $('n-logout').classList.toggle('locked', !ok);
+        $('n-logout').classList.toggle('active-logout', ok);
+        $('lock-status').innerText = ok ? "• SYSTEM AKTYWNY •" : "• WYMAGANE POŁĄCZENIE •";
+        $('lock-status').style.color = ok ? "var(--neon)" : "var(--red)";
+    }
+
+    // NAPRAWIONE SCROLOWANIE - celujemy w anchor na dole
+    function scrollChat() {
+        const anchor = $('chat-anchor');
+        if(anchor) {
+            anchor.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+    }
+
+    function goTo(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('on'));
+        $(id).classList.add('active-page');
+        const key = id.split('-')[1];
+        if($('n-'+key)) $('n-'+key).classList.add('on');
+        
+        $('chat-input-zone').style.display = (id === 'p-chat') ? 'flex' : 'none';
+        
+        if(id === 'p-chat') setTimeout(scrollChat, 200);
+        if(id === 'p-set') setTimeout(startQR, 400); else stopQR();
+    }
+
+    function startQR() {
+        if(!qr) qr = new Html5Qrcode("reader");
+        qr.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, (txt) => {
+            const d = txt.split('|');
+            if(d.length >= 4) {
+                $('t').value = d[0]; $('r').value = d[1]; $('c').value = d[2]; $('n').value = d[3];
+                navigator.vibrate(100); init();
+            }
+        }).catch(e => {});
+    }
+
+    async function stopQR() { if(qr && qr.isScanning) await qr.stop(); }
+
+    function logout() {
+        if(!path) return;
+        if(confirm("Wylogować i wyczyścić dane?")) {
+            localStorage.clear(); path = ""; updateUI(); location.reload();
+        }
+    }
+
+    window.onload = () => {
+        ['gh_t', 'gh_r', 'gh_n', 'gh_c'].forEach(k => {
+            if(localStorage.getItem(k)) $(k.replace('gh_','')).value = localStorage.getItem(k);
+        });
+        if($('c').value && $('t').value) {
+            path = "pokoje/" + CryptoJS.MD5($('c').value).toString().substring(0, 10) + ".txt";
+            setInterval(fetchData, 4000); fetchData();
+        }
+        updateUI();
+    };
+
+    async function init() {
+        if(!$('c').value || !$('t').value) return alert("Uzupełnij dane!");
+        path = "pokoje/" + CryptoJS.MD5($('c').value).toString().substring(0, 10) + ".txt";
+        ['t','r','n','c'].forEach(id => localStorage.setItem('gh_'+id, $(id).value));
+        updateUI(); goTo('p-chat'); setInterval(fetchData, 4000); fetchData();
+    }
+
+    async function fetchData() {
+        if(!path || !$('p-chat').classList.contains('active-page')) return;
+        try {
+            const r = await fetch(`https://api.github.com/repos/${$('r').value}/contents/${path}?t=${Date.now()}`, {
+                headers: {'Authorization': `token ${$('t').value}`}
+            });
+            if(r.ok) {
+                const d = await r.json(); sha = d.sha;
+                const dec = CryptoJS.AES.decrypt(atob(d.content), $('c').value).toString(CryptoJS.enc.Utf8);
+                if(dec && dec !== hist) {
+                    $('chat-container').innerHTML = dec.split('\n').map(l => `<div class="msg">${l}</div>`).join('');
+                    hist = dec;
+                    scrollChat();
+                }
+            }
+        } catch(e) {}
+    }
+
+    async function send() {
+        const v = $('m').value.trim(); if(!v || !path) return;
+        const entry = `<span class="ts">[${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}]</span> <span class="n">${$('n').value}:</span> ${v}`;
+        const full = hist + (hist ? "\n" : "") + entry;
+        const enc = btoa(CryptoJS.AES.encrypt(full, $('c').value).toString());
+        const r = await fetch(`https://api.github.com/repos/${$('r').value}/contents/${path}`, {
+            method: 'PUT', headers: {'Authorization': `token ${$('t').value}`},
+            body: JSON.stringify({message: "msg", content: enc, sha: sha})
+        });
+        if(r.ok) { $('m').value = ""; fetchData(); }
+    }
+</script>
+</body>
+</html>
