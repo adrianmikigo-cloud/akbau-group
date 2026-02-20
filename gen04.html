@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>GHOST GEN PRO - PDF Batch</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root { --neon: #0f4; --bg: #050505; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--neon); padding: 20px; text-align: center; }
+        .card { background: #111; padding: 25px; border-radius: 15px; border: 1px solid var(--neon); display: inline-block; text-align: left; max-width: 400px; margin-bottom: 20px; width: 100%; }
+        h2 { text-align: center; margin-top: 0; letter-spacing: 2px; }
+        label { font-size: 11px; font-weight: bold; text-transform: uppercase; color: #888; }
+        input { display: block; width: 100%; padding: 10px; margin: 5px 0 15px 0; border: 1px solid #333; border-radius: 8px; background: #000; color: var(--neon); box-sizing: border-box; }
+        
+        .pass-container { display: flex; gap: 5px; margin-bottom: 15px; }
+        .pass-container input { margin-bottom: 0; }
+        .btn-small { background: #222; color: var(--neon); border: 1px solid var(--neon); font-size: 10px; cursor: pointer; border-radius: 8px; padding: 0 10px; min-width: 100px; }
+
+        .controls { display: flex; gap: 10px; flex-direction: column; margin-top: 10px; }
+        button.main-btn { padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; text-transform: uppercase; border: none; font-size: 13px; }
+        .btn-qr { background: #222; color: var(--neon); border: 1px solid var(--neon); }
+        .btn-pdf { background: var(--neon); color: #000; }
+        
+        #pdf-template { display: none; width: 210mm; background: white; color: black; padding: 10mm; box-sizing: border-box; }
+        .a4-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); gap: 15px; height: 275mm; }
+        .qr-box { border: 1px solid #eee; padding: 10px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .qr-box span { font-size: 14px; font-weight: bold; margin-top: 8px; font-family: monospace; color: #000; }
+        .qr-box small { font-size: 9px; color: #666; margin-top: 2px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>GHOST GEN PRO</h2>
+    
+    <label>GitHub Token:</label>
+    <input type="password" id="t" placeholder="ghp_...">
+    
+    <label>Użytkownik/Repozytorium:</label>
+    <input id="r" placeholder="nick/repo">
+    
+    <label>Klucz szyfrowania (Hasło):</label>
+    <div class="pass-container">
+        <input type="text" id="c" placeholder="Wpisz lub wygeneruj">
+        <button class="btn-small" onclick="generatePass()">MOCNY KLUCZ</button>
+    </div>
+
+    <label>Prefix Nicku:</label>
+    <input id="n" placeholder="np. Malarz" value="User">
+
+    <div class="controls">
+        <button class="main-btn btn-qr" onclick="generateSingle()">PODGLĄD POJEDYNCZEGO QR</button>
+        <button class="main-btn btn-pdf" onclick="generatePDF()">GENERUJ ARKUSZ PDF (12 KODÓW)</button>
+    </div>
+    
+    <div id="single-preview" style="text-align:center; margin-top: 20px;">
+        <div id="qrcode" style="padding:15px; background:#fff; display:inline-block; border-radius:10px; min-height: 128px; min-width: 128px;"></div>
+        <div id="status-hint" style="font-size:11px; color:#555; margin-top:10px;">Gotowy do pracy</div>
+    </div>
+</div>
+
+<div id="pdf-template">
+    <h3 style="text-align:center; margin-bottom: 20px; font-family: sans-serif;">ARKUSZ DOSTĘPOWY GHOST PRO</h3>
+    <div class="a4-grid" id="a4-grid"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function generatePass() {
+    const charset = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%";
+    let res = "";
+    const rv = new Uint32Array(20);
+    window.crypto.getRandomValues(rv);
+    for (let i = 0; i < 20; i++) res += charset.charAt(rv[i] % charset.length);
+    $('c').value = res;
+}
+
+function generateSingle() {
+    const t = $('t').value, r = $('r').value, c = $('c').value, n = $('n').value;
+    if(!t || !r || !c) return alert("Wypełnij Token, Repo i Klucz!");
+    
+    const data = `${t}|${r}|${c}|${n}`;
+    $('qrcode').innerHTML = "";
+    new QRCode($('qrcode'), { text: data, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.H });
+    $('status-hint').innerText = "To jest QR dla: " + n;
+    $('status-hint').style.color = "var(--neon)";
+}
+
+async function generatePDF() {
+    const t = $('t').value, r = $('r').value, n = $('n').value;
+    if(!t || !r) return alert("BŁĄD: Token i Repo są wymagane do PDF!");
+
+    const grid = $('a4-grid');
+    grid.innerHTML = ""; 
+    $('pdf-template').style.display = "block";
+
+    for(let i = 1; i <= 12; i++) {
+        const id = i < 10 ? "Q0" + i : "Q" + i;
+        // W PDF każdy dostaje unikalny, losowy klucz dla bezpieczeństwa
+        const pass = Array.from(window.crypto.getRandomValues(new Uint32Array(15)))
+                          .map(v => "abcdefghijkmnopqrstuvwxyz23456789"[v % 32]).join('');
+        
+        const data = `${t}|${r}|${pass}|${n}_${id}`;
+
+        const box = document.createElement('div');
+        box.className = 'qr-box';
+        const qrDiv = document.createElement('div');
+        box.appendChild(qrDiv);
+        
+        const label = document.createElement('span');
+        label.innerText = id;
+        box.appendChild(label);
+
+        const small = document.createElement('small');
+        small.innerText = "GHOST PRO ACCESS";
+        box.appendChild(small);
+
+        grid.appendChild(box);
+
+        new QRCode(qrDiv, { text: data, width: 130, height: 130, correctLevel: QRCode.CorrectLevel.M });
+    }
+
+    const opt = {
+        margin: 0,
+        filename: `GHOST_BATCH_${n}.pdf`,
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    await html2pdf().set(opt).from($('pdf-template')).save();
+    $('pdf-template').style.display = "none";
+}
+</script>
+</body>
+</html>
