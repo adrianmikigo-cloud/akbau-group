@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GHOST BUILD v1.0 | AK Systems</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        :root { --neon: #0f4; --bg: #050505; --red: #ff4444; --nav-h: 75px; --card: #111; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Segoe UI', monospace; background: var(--bg); color: var(--neon); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        .page { display: none; flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 100px; }
+        .active-page { display: block; }
+
+        /* Formularze */
+        input, select { background: #000; border: 1px solid var(--neon); color: var(--neon); padding: 12px; border-radius: 8px; width: 100%; margin-bottom: 10px; font-size: 14px; }
+        button { background: var(--neon); color: #000; border: none; padding: 15px; font-weight: bold; border-radius: 8px; width: 100%; cursor: pointer; text-transform: uppercase; }
+        
+        /* Karty Budowy */
+        .b-card { background: var(--card); border: 1px solid #222; border-left: 4px solid var(--neon); padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+        .b-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; display: block; }
+        .sub-box { background: #000; padding: 8px; border-radius: 5px; margin-top: 10px; border: 1px solid #1a1a1a; }
+        .label { font-size: 10px; color: #666; font-weight: bold; margin-bottom: 5px; display: block; }
+        .item-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid #111; }
+        
+        /* Nawigacja */
+        .nav-bar { height: var(--nav-h); background: #000; display: flex; border-top: 2px solid #222; position: fixed; bottom: 0; width: 100%; }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #333; font-size: 10px; cursor: pointer; }
+        .nav-item.on { color: var(--neon); }
+        .nav-item i { font-style: normal; font-size: 24px; }
+    </style>
+</head>
+<body>
+
+    <div id="p-set" class="page active-page">
+        <h2 style="text-align:center">KONFIGURACJA GHOST</h2>
+        <input type="password" id="t" placeholder="GitHub Token">
+        <input id="r" placeholder="User/Repozytorium">
+        <input type="password" id="c" placeholder="Klucz Szyfru (Hasło)">
+        <button onclick="init()">POŁĄCZ I SYNC</button>
+        <p id="status" style="text-align:center; font-size:12px; margin-top:20px; color:#444">Status: Rozłączony</p>
+    </div>
+
+    <div id="p-budowy" class="page">
+        <div class="b-card" style="border-left-color: var(--accent)">
+            <span class="label">NOWA INWESTYCJA</span>
+            <input id="new-b-name" placeholder="Nazwa budowy...">
+            <button onclick="dodajBudowe()">OTWÓRZ BUDOWĘ</button>
+        </div>
+        <div id="lista-budow"></div>
+    </div>
+
+    <div id="p-zasoby" class="page">
+        <div class="b-card">
+            <span class="label">DODAJ PRACOWNIKA</span>
+            <input id="new-p-name" placeholder="Imię i nazwisko">
+            <button onclick="dodajZasob('pracownicy', {imie: document.getElementById('new-p-name').value, budowaId: null})">DODAJ DO BAZY</button>
+        </div>
+        <div class="b-card">
+            <span class="label">DODAJ NARZĘDZIE</span>
+            <input id="new-n-name" placeholder="Nazwa narzędzia (np. Hilti)">
+            <button onclick="dodajZasob('narzedzia', {nazwa: document.getElementById('new-n-name').value, budowaId: null})">DODAJ DO MAGAZYNU</button>
+        </div>
+        <div id="lista-magazyn" style="font-size: 11px; opacity: 0.6;"></div>
+    </div>
+
+    <nav class="nav-bar">
+        <div class="nav-item on" id="n-set" onclick="goTo('p-set')"><i>⚙️</i><span>USTAW</span></div>
+        <div class="nav-item" id="n-budowy" onclick="goTo('p-budowy')"><i>🏗️</i><span>PROJEKTY</span></div>
+        <div class="nav-item" id="n-zasoby" onclick="goTo('p-zasoby')"><i>🛠️</i><span>ZASOBY</span></div>
+    </nav>
+
+<script>
+    let DB = { pracownicy: [], narzedzia: [], budowy: [] };
+    let sha = "", path = "baza_budowy.txt";
+    const $ = id => document.getElementById(id);
+
+    function goTo(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('on'));
+        $(id).classList.add('active-page');
+        $('n-'+id.split('-')[1]).classList.add('on');
+    }
+
+    async function init() {
+        if(!$('t').value || !$('c').value) return alert("Uzupełnij Token i Hasło!");
+        localStorage.setItem('gh_t', $('t').value);
+        localStorage.setItem('gh_r', $('r').value);
+        localStorage.setItem('gh_c', $('c').value);
+        await fetchData();
+        goTo('p-budowy');
+    }
+
+    async function fetchData() {
+        try {
+            const r = await fetch(`https://api.github.com/repos/${$('r').value}/contents/${path}?t=${Date.now()}`, {
+                headers: {'Authorization': `token ${$('t').value}`}
+            });
+            if(r.ok) {
+                const d = await r.json(); sha = d.sha;
+                const dec = CryptoJS.AES.decrypt(atob(d.content), $('c').value).toString(CryptoJS.enc.Utf8);
+                if(dec) DB = JSON.parse(dec);
+                render();
+                $('status').innerText = "Status: POŁĄCZONO";
+                $('status').style.color = "var(--neon)";
+            } else {
+                $('status').innerText = "Status: PLIK NIE ISTNIEJE (Nowa baza)";
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function pushData() {
+        const enc = btoa(CryptoJS.AES.encrypt(JSON.stringify(DB), $('c').value).toString());
+        const r = await fetch(`https://api.github.com/repos/${$('r').value}/contents/${path}`, {
+            method: 'PUT', headers: {'Authorization': `token ${$('t').value}`},
+            body: JSON.stringify({message: "db update", content: enc, sha: sha})
+        });
+        if(r.ok) {
+            const res = await r.json(); sha = res.content.sha;
+            render();
+        }
+    }
+
+    function dodajBudowe() {
+        const name = $('new-b-name').value;
+        if(!name) return;
+        DB.budowy.push({id: Date.now(), nazwa: name});
+        $('new-b-name').value = "";
+        pushData();
+    }
+
+    function dodajZasob(typ, dane) {
+        if(!dane[Object.keys(dane)[0]]) return;
+        dane.id = Date.now();
+        DB[typ].push(dane);
+        pushData();
+    }
+
+    function zmienRelacje(typ, objId, budowaId) {
+        const obj = DB[typ].find(o => o.id === objId);
+        if(obj) {
+            obj.budowaId = budowaId === "null" ? null : parseInt(budowaId);
+            pushData();
+        }
+    }
+
+    function render() {
+        // Render projektów
+        $('lista-budow').innerHTML = DB.budowy.map(b => {
+            const ekipa = DB.pracownicy.filter(p => p.budowaId === b.id);
+            const sprzet = DB.narzedzia.filter(n => n.budowaId === b.id);
+            const wolni_p = DB.pracownicy.filter(p => p.budowaId === null);
+            const wolny_s = DB.narzedzia.filter(n => n.budowaId === null);
+
+            return `
+                <div class="b-card">
+                    <span class="b-title">${b.nazwa}</span>
+                    <div class="sub-box">
+                        <span class="label">👷 EKIPA (${ekipa.length})</span>
+                        ${ekipa.map(p => `<div class="item-row">${p.imie} <button onclick="zmienRelacje('pracownicy', ${p.id}, 'null')" style="width:auto; padding:2px 5px; font-size:9px;">X</button></div>`).join('')}
+                        <select onchange="zmienRelacje('pracownicy', parseInt(this.value), ${b.id})">
+                            <option value="">+ Przypisz pracownika</option>
+                            ${wolni_p.map(p => `<option value="${p.id}">${p.imie}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="sub-box">
+                        <span class="label">🛠️ SPRZĘT (${sprzet.length})</span>
+                        ${sprzet.map(n => `<div class="item-row">${n.nazwa} <button onclick="zmienRelacje('narzedzia', ${n.id}, 'null')" style="width:auto; padding:2px 5px; font-size:9px;">X</button></div>`).join('')}
+                        <select onchange="zmienRelacje('narzedzia', parseInt(this.value), ${b.id})">
+                            <option value="">+ Dodaj sprzęt</option>
+                            ${wolny_s.map(n => `<option value="${n.id}">${n.nazwa}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>`;
+        }).join('');
+    }
+
+    window.onload = () => {
+        ['t', 'r', 'c'].forEach(k => {
+            if(localStorage.getItem('gh_'+k)) $(k).value = localStorage.getItem('gh_'+k);
+        });
+        if($('t').value) init();
+    };
+</script>
+</body>
+</html>
