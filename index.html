@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GHOST PRO v10.3.2</title>
+    <title>GHOST PRO v10.3.2 | AK Systems</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
@@ -50,17 +50,26 @@
         .btn-m span { font-size: 14px; letter-spacing: 2px; }
         .btn-m:active { background: var(--neon); color: #000; box-shadow: 0 0 20px var(--neon); }
 
-        /* --- CZAT (NAPRAWIONE SCROLOWANIE) --- */
-        #chat-container { 
-            display: block; /* Powrót do block, żeby scroll działał naturalnie */
-            width: 100%;
-        }
+        /* --- CZAT --- */
+        #chat-container { width: 100%; display: block; }
         .msg { border-bottom: 1px solid #111; padding: 10px 0; font-size: 14px; line-height: 1.4; color: #fff; word-break: break-word; }
         .ts { color: #062; font-size: 10px; margin-right: 6px; }
         .n { font-weight: bold; color: var(--neon); }
 
-        /* --- USTAW --- */
-        #reader { width: 100%; min-height: 250px; background: #000; border: 2px solid var(--neon); margin-bottom: 15px; border-radius: 15px; overflow: hidden; }
+        /* --- USTAW / SKANER --- */
+        #reader { 
+            width: 100%; 
+            max-width: 400px; 
+            min-height: 250px; 
+            background: #000; 
+            border: 2px solid var(--neon); 
+            margin: 0 auto 15px auto; 
+            border-radius: 15px; 
+            overflow: hidden; 
+            position: relative;
+        }
+        #reader video { object-fit: cover !important; }
+
         input { background: #111; border: 1px solid var(--neon); color: var(--neon); padding: 15px; border-radius: 10px; font-size: 16px; width: 100%; margin-bottom: 10px; }
         .btn-act { background: var(--neon); color: #000; border: none; padding: 18px; font-weight: bold; border-radius: 10px; width: 100%; font-size: 16px; cursor: pointer;}
 
@@ -141,39 +150,59 @@
         $('lock-status').style.color = ok ? "var(--neon)" : "var(--red)";
     }
 
-    // NAPRAWIONE SCROLOWANIE - celujemy w anchor na dole
     function scrollChat() {
         const anchor = $('chat-anchor');
-        if(anchor) {
-            anchor.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }
+        if(anchor) { anchor.scrollIntoView({ behavior: 'smooth', block: 'end' }); }
     }
 
     function goTo(id) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page'));
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('on'));
         $(id).classList.add('active-page');
+        
         const key = id.split('-')[1];
         if($('n-'+key)) $('n-'+key).classList.add('on');
         
         $('chat-input-zone').style.display = (id === 'p-chat') ? 'flex' : 'none';
         
         if(id === 'p-chat') setTimeout(scrollChat, 200);
-        if(id === 'p-set') setTimeout(startQR, 400); else stopQR();
+        
+        // Zarządzanie skanerem
+        if(id === 'p-set') {
+            setTimeout(startQR, 500); 
+        } else {
+            stopQR();
+        }
     }
 
-    function startQR() {
+    async function startQR() {
+        if(qr && qr.isScanning) return;
         if(!qr) qr = new Html5Qrcode("reader");
-        qr.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, (txt) => {
+        
+        const config = { fps: 15, qrbox: { width: 250, height: 250 } };
+        
+        qr.start({ facingMode: "environment" }, config, (txt) => {
             const d = txt.split('|');
             if(d.length >= 4) {
                 $('t').value = d[0]; $('r').value = d[1]; $('c').value = d[2]; $('n').value = d[3];
-                navigator.vibrate(100); init();
+                if (navigator.vibrate) navigator.vibrate(100);
+                stopQR().then(() => init());
             }
-        }).catch(e => {});
+        }).catch(e => {
+            console.warn("QR Error:", e);
+            $('reader').innerHTML = `<div style="padding:40px; text-align:center; font-size:10px;">KAMERA NIEDOSTĘPNA LUB ZABLOKOWANA</div>`;
+        });
     }
 
-    async function stopQR() { if(qr && qr.isScanning) await qr.stop(); }
+    async function stopQR() {
+        if(qr && qr.isScanning) {
+            try {
+                await qr.stop();
+                qr = null; 
+                $('reader').innerHTML = ""; 
+            } catch(e) { console.error(e); }
+        }
+    }
 
     function logout() {
         if(!path) return;
@@ -197,7 +226,8 @@
         if(!$('c').value || !$('t').value) return alert("Uzupełnij dane!");
         path = "pokoje/" + CryptoJS.MD5($('c').value).toString().substring(0, 10) + ".txt";
         ['t','r','n','c'].forEach(id => localStorage.setItem('gh_'+id, $(id).value));
-        updateUI(); goTo('p-chat'); setInterval(fetchData, 4000); fetchData();
+        updateUI(); goTo('p-chat'); 
+        setInterval(fetchData, 4000); fetchData();
     }
 
     async function fetchData() {
